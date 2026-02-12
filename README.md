@@ -1,79 +1,59 @@
-# ATM10 ChunkFleet (MasterMine-Style Chunk Mining)
+# ATM10 Mining Fleet (MasterMine-Style) for CC:Tweaked
 
-Dieses Projekt liefert ein **MasterMine-ähnliches System für Chunk-Mining** statt Strip-Mining:
+Dieses Repository enthält ein **Controller + Turtle-System** für **16 Advanced Mining Turtles** in ATM10.
 
-- Zentrale Controller-UI mit Karte
-- 16+ Advanced Mining Turtles
-- Chunk auswählen -> Turtle mined den ganzen Chunk nach unten
-- Auto-Entladen in General Chest + Auto-Refuel aus Fuel Chest
+## Features
 
-## Enthaltene Dateien
+- Chunk-basierte Jobvergabe über ein zentrales UI (ähnlich MasterMine-Stil).
+- 16 Turtles können sich gleichzeitig beim Controller anmelden.
+- Chunk-Auswahl per Tastatur (Pfeile + Enter) oder per Monitor-Touch.
+- Turtles:
+  - fahren vom Homepunkt zum ausgewählten Chunk,
+  - minen den kompletten Chunk schichtweise nach unten,
+  - leeren Inventar in die General Chest,
+  - holen Fuel aus der Fuel Chest,
+  - kehren automatisch zum Homepunkt zurück.
 
-- `controller/mastermine.lua` - Controller mit Karte, Job-Queue, Mined-Tracking
-- `turtles/miner.lua` - Turtle-Worker für Chunk-Mining
-- `install.lua` - Installer (installiert Controller/Turtle als `startup`)
+## Dateien
 
-## Installer (wie bei MasterMine-Workflow)
-
-1. Dateien auf Computer/Turtle verfügbar machen.
-2. `install` ausführen.
-3. Typ wählen:
-   - `1` Controller
-   - `2` Turtle
-4. Ziel meist `startup`.
-
-## Controller Features
-
-- **Richtige Chunk-Karte** mit:
-  - Cursor-Position
-  - Home-Chunk (Origin)
-  - aktive/queued Chunks
-  - bereits geminte Chunks
-  - Turtle-Position/Status
-- Persistente World-State Datei `controller_state`
-- Queueing und automatische Neuvergabe bei freien Turtles
-
-### Controller Controls
-
-- `Arrow Keys` Cursor bewegen
-- `Enter` Chunk queue
-- `W A S D` Karte pannen
-- `- / +` Zoom ändern
-- `O` Cursor als Home/Origin setzen
-- `M` Chunk manuell als gemined markieren
-- `R` Recall alle Turtles
-
-## Turtle Features
-
-- Meldet sich beim Controller an (inkl. Position/Fuel)
-- Nimmt Chunk-Job an und mined 16x16 Layer für Layer nach unten
-- Bei Inventar/Fuel-Bedarf: Home-Service (unload + refuel) und zurück zur Mine
-- `recall` unterstützt
-- Lokale Konfiguration via:
-
-```lua
-startup config
-```
-
-Konfigurierbar:
-- `unloadSide`
-- `fuelSide`
-- `minFuel`
-- `reserveFuel`
+- `controller/mastermine.lua` → Steuerrechner UI + Dispatching
+- `turtles/miner.lua` → Turtle-Programm (als `startup` auf jede Turtle)
 
 ## Aufbau im Spiel
 
-### Controller
-- Advanced Computer + Wireless Modem
-- Optional Monitor (Touch-Auswahl auf Karte)
-- `startup` läuft Controller
+### Controller (Advanced Computer)
 
-### Pro Turtle
-- Advanced Mining Turtle + Wireless Modem
-- General Chest an `unloadSide`
-- Fuel Chest an `fuelSide`
-- `startup` läuft Miner
+1. Stelle einen Advanced Computer mit **Wireless Modem** auf.
+2. Optional: Monitor an eine Seite (Touch-Chunk-Auswahl).
+3. Kopiere `controller/mastermine.lua` auf den Computer und starte es.
 
-## Hinweis
+### Turtles (16x Advanced Mining Turtle)
 
-Für präzise Positionsanzeige ist ein GPS-Setup empfohlen. Ohne GPS arbeitet die Turtle trotzdem über interne Positionsfortschreibung.
+1. Alle 16 Turtles starten am Homepunkt (`0,0,0`) bzw. derselben Dock-Position relativ zu ihren Chests.
+2. Jede Turtle braucht ein Wireless Modem.
+3. Lege `turtles/miner.lua` als `startup` auf jede Turtle.
+4. Stelle pro Turtle sicher:
+   - **General Chest** liegt an `unloadSide`
+   - **Fuel Chest** liegt an `fuelSide`
+
+Konfiguration je Turtle:
+
+```lua
+miner config
+```
+
+Danach Side-Konfiguration und Mindestfuel setzen.
+
+## Controller Bedienung
+
+- **Pfeiltasten**: Chunk-Cursor bewegen
+- **Enter**: Chunk als Mining-Job senden
+- **R**: Recall an alle Turtles (alle fahren nach Hause)
+- **O**: Aktuelle Cursor-Position als neue Origin speichern
+
+## Hinweise
+
+- Für exakte Weltkoordinaten ist ein GPS-Netzwerk empfohlen.
+- Das Beispiel nutzt Chunkgröße 16x16 und schichtweises Mining bis kein `down()` mehr möglich ist.
+- Bei komplexen Basen ggf. `moveTo(0,0,0)`-Home-Logik pro Turtle anpassen.
+
