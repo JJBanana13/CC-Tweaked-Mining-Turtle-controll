@@ -87,9 +87,12 @@ local function generateChunkSpiral(centerX, centerZ, count)
 end
 
 local function initChunkQueue(numChunks)
+    -- Block-Koordinaten aus Config automatisch in Chunk-Koordinaten umrechnen
+    local startCX = math.floor(config.START_X / config.CHUNK_SIZE)
+    local startCZ = math.floor(config.START_Z / config.CHUNK_SIZE)
     chunkQueue = generateChunkSpiral(
-        config.START_CHUNK_X,
-        config.START_CHUNK_Z,
+        startCX,
+        startCZ,
         numChunks
     )
     local filtered = {}

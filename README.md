@@ -99,9 +99,9 @@ config.BASE_Z = 100      -- Z-Koordinate
 config.MAX_Y = 319       -- Oberste Ebene
 config.MIN_Y = -64        -- Unterste Ebene
 
--- Erster Chunk der abgebaut wird
-config.START_CHUNK_X = 0  -- Chunk-X (Block-X / 16)
-config.START_CHUNK_Z = 0  -- Chunk-Z (Block-Z / 16)
+-- Mining Start-Position (Block-Koordinaten, wie im F3-Screen)
+config.START_X = 0        -- X wo das Mining starten soll
+config.START_Z = 0        -- Z wo das Mining starten soll
 ```
 
 ### 4. Starten
