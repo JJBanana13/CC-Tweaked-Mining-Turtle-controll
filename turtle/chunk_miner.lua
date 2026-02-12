@@ -2,19 +2,56 @@
 -- Chunk Miner - Mining Turtle Programm
 -- Baut einen kompletten Chunk (16x16) ab
 -- von oben (Y=319) bis unten (Y=-64)
+--
+-- Config wird vom Server per Rednet empfangen!
 -- ============================================
 
-local config = require("shared.config")
 local protocol = require("shared.protocol")
 
 local miner = {}
+
+-- Nachrichten-Typen (Protokoll-Konstanten)
+local MSG = {
+    REGISTER = "register",
+    STATUS = "status",
+    CHUNK_DONE = "chunk_done",
+    NEED_FUEL = "need_fuel",
+    INVENTORY_FULL = "inv_full",
+    ERROR = "error",
+    HEARTBEAT = "heartbeat",
+    ASSIGN_CHUNK = "assign_chunk",
+    GO_REFUEL = "go_refuel",
+    GO_DEPOSIT = "go_deposit",
+    PAUSE = "pause",
+    RESUME = "resume",
+    STOP = "stop",
+    COME_HOME = "come_home",
+}
+
+-- Status-Typen
+local STATE = {
+    IDLE = "idle",
+    MINING = "mining",
+    TRAVELING = "traveling",
+    REFUELING = "refueling",
+    DEPOSITING = "depositing",
+    PAUSED = "paused",
+    ERROR = "error",
+    DONE = "done",
+}
+
+-- Config vom Server (wird bei Registration empfangen)
+local cfg = nil
 
 -- Turtle State
 local state = {
     id = os.getComputerID(),
     label = os.getComputerLabel() or ("Turtle_" .. os.getComputerID()),
-    status = config.STATE.IDLE,
+    status = STATE.IDLE,
     serverId = nil,
+
+    -- Home-Position (wo die Turtle aufgebaut wurde)
+    home = nil, -- {x, y, z}
 
     -- Aktuelle Position (wird beim Start gesetzt)
     x = 0,
@@ -178,24 +215,34 @@ end
 
 -- Bewege zur Basis (Fuel/Output Chest)
 local function goToBase()
-    state.status = config.STATE.TRAVELING
+    state.status = STATE.TRAVELING
     sendStatus()
     -- Erst hoch auf sichere Hoehe
-    goToY(config.BASE_Y + 5)
+    goToY(cfg.BASE_Y + 5)
     -- Dann zur Basis
-    goToXZ(config.BASE_X, config.BASE_Z)
-    goToY(config.BASE_Y)
+    goToXZ(cfg.BASE_X, cfg.BASE_Z)
+    goToY(cfg.BASE_Y)
+    return true
+end
+
+-- Bewege zur Home-Position
+local function goToHome()
+    state.status = STATE.TRAVELING
+    sendStatus()
+    goToY(state.home.y + 5)
+    goToXZ(state.home.x, state.home.z)
+    goToY(state.home.y)
     return true
 end
 
 -- Bewege zum Chunk-Startpunkt
 local function goToChunkStart(cx, cz, targetY)
-    state.status = config.STATE.TRAVELING
+    state.status = STATE.TRAVELING
     sendStatus()
-    local startX = cx * config.CHUNK_SIZE
-    local startZ = cz * config.CHUNK_SIZE
+    local startX = cx * cfg.CHUNK_SIZE
+    local startZ = cz * cfg.CHUNK_SIZE
     -- Hoch auf sichere Hoehe
-    goToY(config.BASE_Y + 5)
+    goToY(cfg.BASE_Y + 5)
     -- Zum Chunk
     goToXZ(startX, startZ)
     -- Runter auf Ziel-Y
@@ -229,13 +276,13 @@ end
 -- Items in die Output Chest abladen
 local function depositItems()
     local prevStatus = state.status
-    state.status = config.STATE.DEPOSITING
+    state.status = STATE.DEPOSITING
     sendStatus()
 
     -- Zur Output Chest navigieren
-    local chestX = config.BASE_X + config.OUTPUT_CHEST.x
-    local chestZ = config.BASE_Z + config.OUTPUT_CHEST.z
-    local chestY = config.BASE_Y + config.OUTPUT_CHEST.y
+    local chestX = cfg.BASE_X + cfg.OUTPUT_CHEST.x
+    local chestZ = cfg.BASE_Z + cfg.OUTPUT_CHEST.z
+    local chestY = cfg.BASE_Y + cfg.OUTPUT_CHEST.y
 
     goToXZ(chestX, chestZ)
     goToY(chestY)
@@ -263,18 +310,18 @@ local function getFuelLevel()
 end
 
 local function needsFuel()
-    return getFuelLevel() < config.FUEL_THRESHOLD
+    return getFuelLevel() < cfg.FUEL_THRESHOLD
 end
 
 local function refuel()
     local prevStatus = state.status
-    state.status = config.STATE.REFUELING
+    state.status = STATE.REFUELING
     sendStatus()
 
     -- Zur Fuel Chest navigieren
-    local chestX = config.BASE_X + config.FUEL_CHEST.x
-    local chestZ = config.BASE_Z + config.FUEL_CHEST.z
-    local chestY = config.BASE_Y + config.FUEL_CHEST.y
+    local chestX = cfg.BASE_X + cfg.FUEL_CHEST.x
+    local chestZ = cfg.BASE_Z + cfg.FUEL_CHEST.z
+    local chestY = cfg.BASE_Y + cfg.FUEL_CHEST.y
 
     goToXZ(chestX, chestZ)
     goToY(chestY)
@@ -286,13 +333,13 @@ local function refuel()
     turtle.refuel()
 
     -- Genug Fuel?
-    if getFuelLevel() < config.FUEL_THRESHOLD then
+    if getFuelLevel() < cfg.FUEL_THRESHOLD then
         -- Nochmal versuchen
         turtle.suck(64)
         turtle.refuel()
     end
 
-    return getFuelLevel() >= config.FUEL_THRESHOLD
+    return getFuelLevel() >= cfg.FUEL_THRESHOLD
 end
 
 -- ============================================
@@ -301,13 +348,14 @@ end
 
 function sendStatus()
     if not state.serverId then return end
-    protocol.send(state.serverId, config.MSG.STATUS, {
+    protocol.send(state.serverId, MSG.STATUS, {
         id = state.id,
         label = state.label,
         status = state.status,
         x = state.x,
         y = state.y,
         z = state.z,
+        home = state.home,
         fuel = getFuelLevel(),
         inventory = getInventoryCount(),
         chunk = state.chunk,
@@ -325,10 +373,10 @@ end
 local function mineLayer()
     faceTo(0) -- Start: nach Nord schauen
 
-    for row = 0, config.CHUNK_SIZE - 1 do
+    for row = 0, cfg.CHUNK_SIZE - 1 do
         state.row = row
         -- Eine Reihe abbauen (15 Bloecke vorwaerts = 16 Positionen)
-        for col = 1, config.CHUNK_SIZE - 1 do
+        for col = 1, cfg.CHUNK_SIZE - 1 do
             -- Block davor abbauen und vorwaerts
             if turtle.detect() then
                 turtle.dig()
@@ -350,11 +398,11 @@ local function mineLayer()
                     goToBase()
                     depositItems()
                     if needsFuel() then refuel() end
-                    goToY(config.BASE_Y + 5)
+                    goToY(cfg.BASE_Y + 5)
                     goToXZ(retX, retZ)
                     goToY(retY)
                     faceTo(retFacing)
-                    state.status = config.STATE.MINING
+                    state.status = STATE.MINING
                     sendStatus()
                 end
             end
@@ -367,7 +415,7 @@ local function mineLayer()
         end
 
         -- Am Ende der Reihe: naechste Reihe (wenn nicht letzte)
-        if row < config.CHUNK_SIZE - 1 then
+        if row < cfg.CHUNK_SIZE - 1 then
             if row % 2 == 0 then
                 -- Rechts abbiegen zur naechsten Reihe
                 turnRight()
@@ -407,18 +455,18 @@ end
 -- Kompletten Chunk abbauen
 local function mineChunk(cx, cz)
     state.chunk = { cx = cx, cz = cz }
-    state.status = config.STATE.MINING
+    state.status = STATE.MINING
 
-    local startX = cx * config.CHUNK_SIZE
-    local startZ = cz * config.CHUNK_SIZE
+    local startX = cx * cfg.CHUNK_SIZE
+    local startZ = cz * cfg.CHUNK_SIZE
 
     print("Starte Chunk (" .. cx .. ", " .. cz .. ")")
     print("Block-Position: (" .. startX .. ", " .. startZ .. ")")
 
     -- Von oben nach unten abbauen (je 2 Ebenen)
-    local currentY = config.MAX_Y
+    local currentY = cfg.MAX_Y
 
-    while currentY >= config.MIN_Y do
+    while currentY >= cfg.MIN_Y do
         state.layer = currentY
 
         -- Pruefe Fuel vor jeder Ebene
@@ -426,7 +474,7 @@ local function mineChunk(cx, cz)
             local retX, retZ = state.x, state.z
             goToBase()
             if not refuel() then
-                protocol.send(state.serverId, config.MSG.NEED_FUEL, {
+                protocol.send(state.serverId, MSG.NEED_FUEL, {
                     id = state.id,
                     fuel = getFuelLevel(),
                 })
@@ -442,7 +490,7 @@ local function mineChunk(cx, cz)
             -- Zurueck zum Chunk
             goToChunkStart(cx, cz, currentY)
             goToXZ(startX, startZ)
-            state.status = config.STATE.MINING
+            state.status = STATE.MINING
         end
 
         -- Zum Startpunkt dieser Ebene
@@ -468,15 +516,29 @@ local function mineChunk(cx, cz)
     if needsFuel() then refuel() end
 
     -- Server benachrichtigen
-    protocol.send(state.serverId, config.MSG.CHUNK_DONE, {
+    protocol.send(state.serverId, MSG.CHUNK_DONE, {
         id = state.id,
         chunk = state.chunk,
         blocksMinedTotal = state.blocksMinedTotal,
     })
 
     state.chunk = nil
-    state.status = config.STATE.IDLE
+    state.status = STATE.IDLE
     sendStatus()
+end
+
+-- ============================================
+-- Config vom Server speichern
+-- ============================================
+
+local function applyConfig(serverConfig)
+    if not serverConfig then return false end
+    cfg = serverConfig
+    print("Config vom Server empfangen:")
+    print("  Basis: (" .. cfg.BASE_X .. ", " .. cfg.BASE_Y .. ", " .. cfg.BASE_Z .. ")")
+    print("  Mining Y: " .. cfg.MAX_Y .. " bis " .. cfg.MIN_Y)
+    print("  Chunk Size: " .. cfg.CHUNK_SIZE)
+    return true
 end
 
 -- ============================================
@@ -484,39 +546,55 @@ end
 -- ============================================
 
 local function handleServerMessage(senderId, msg)
-    if msg.type == config.MSG.ASSIGN_CHUNK then
+    -- Config aus der Nachricht extrahieren (kommt bei Registration)
+    if msg.data and msg.data.config then
+        applyConfig(msg.data.config)
+    end
+
+    if msg.type == MSG.ASSIGN_CHUNK then
         local cx = msg.data.cx
         local cz = msg.data.cz
         print("Neuer Auftrag: Chunk (" .. cx .. ", " .. cz .. ")")
         mineChunk(cx, cz)
         return true
 
-    elseif msg.type == config.MSG.PAUSE then
-        print("PAUSE vom Server")
-        state.status = config.STATE.PAUSED
+    elseif msg.type == MSG.PAUSE then
+        print("PAUSE vom Server - kehre nach Home zurueck")
+        state.status = STATE.PAUSED
         sendStatus()
+        if state.home then
+            goToHome()
+            state.status = STATE.PAUSED
+            sendStatus()
+        end
         return false
 
-    elseif msg.type == config.MSG.RESUME then
+    elseif msg.type == MSG.RESUME then
         print("RESUME vom Server")
-        state.status = config.STATE.IDLE
+        state.status = STATE.IDLE
         sendStatus()
         return true
 
-    elseif msg.type == config.MSG.STOP then
-        print("STOP vom Server - fahre zur Basis")
-        goToBase()
-        depositItems()
-        state.status = config.STATE.IDLE
+    elseif msg.type == MSG.STOP then
+        print("STOP vom Server - kehre nach Home zurueck")
+        if state.home then
+            goToHome()
+        else
+            goToBase()
+            depositItems()
+        end
+        state.status = STATE.IDLE
         sendStatus()
         return false
 
-    elseif msg.type == config.MSG.COME_HOME then
-        print("Kehre zur Basis zurueck")
-        goToBase()
-        depositItems()
-        if needsFuel() then refuel() end
-        state.status = config.STATE.IDLE
+    elseif msg.type == MSG.COME_HOME then
+        print("Kehre nach Home zurueck")
+        if state.home then
+            goToHome()
+        else
+            goToBase()
+        end
+        state.status = STATE.IDLE
         sendStatus()
         return false
     end
@@ -537,24 +615,11 @@ local function heartbeatLoop()
 end
 
 -- ============================================
--- Nachrichten-Empfang Loop
--- ============================================
-
-local function messageLoop()
-    while true do
-        local senderId, msg = protocol.receive(1)
-        if senderId and msg then
-            handleServerMessage(senderId, msg)
-        end
-    end
-end
-
--- ============================================
 -- Hauptprogramm
 -- ============================================
 
 function miner.run()
-    print("=== Chunk Miner v1.0 ===")
+    print("=== Chunk Miner v2.0 ===")
     print("Turtle ID: " .. state.id)
 
     -- Modem initialisieren
@@ -568,34 +633,46 @@ function miner.run()
         detectFacing()
         print("Richtung: " .. state.facing)
     else
-        print("WARNUNG: Kein GPS! Verwende Basis als Position.")
-        state.x = config.BASE_X
-        state.y = config.BASE_Y
-        state.z = config.BASE_Z
+        print("WARNUNG: Kein GPS Signal!")
+        print("Bitte GPS aufsetzen oder Turtle an GPS-Position platzieren.")
     end
 
-    -- Beim Server registrieren
+    -- Home-Position setzen (wo die Turtle aufgebaut wurde)
+    state.home = { x = state.x, y = state.y, z = state.z }
+    print("Home-Position: (" .. state.home.x .. ", " .. state.home.y .. ", " .. state.home.z .. ")")
+
+    -- Beim Server registrieren (und Config empfangen)
     print("Suche Server...")
     local registered = false
     while not registered do
-        protocol.broadcast(config.MSG.REGISTER, {
+        protocol.broadcast(MSG.REGISTER, {
             id = state.id,
             label = state.label,
             x = state.x,
             y = state.y,
             z = state.z,
+            home = state.home,
             fuel = getFuelLevel(),
         })
 
         -- Auf Antwort warten
         local senderId, msg = protocol.receive(5)
         if senderId and msg then
-            if msg.type == config.MSG.ASSIGN_CHUNK or msg.type == config.MSG.PAUSE then
+            if msg.type == MSG.ASSIGN_CHUNK or msg.type == MSG.PAUSE then
                 state.serverId = senderId
                 registered = true
                 print("Server gefunden! ID: " .. senderId)
 
-                if msg.type == config.MSG.ASSIGN_CHUNK then
+                -- Config aus der Antwort extrahieren
+                if msg.data and msg.data.config then
+                    applyConfig(msg.data.config)
+                end
+
+                if not cfg then
+                    print("FEHLER: Keine Config vom Server erhalten!")
+                    print("Versuche erneut...")
+                    registered = false
+                elseif msg.type == MSG.ASSIGN_CHUNK then
                     handleServerMessage(senderId, msg)
                 end
             end
@@ -609,9 +686,9 @@ function miner.run()
     parallel.waitForAny(
         function()
             while true do
-                if state.status == config.STATE.IDLE then
+                if state.status == STATE.IDLE then
                     -- Server fragen ob es Arbeit gibt
-                    protocol.send(state.serverId, config.MSG.STATUS, {
+                    protocol.send(state.serverId, MSG.STATUS, {
                         id = state.id,
                         label = state.label,
                         status = state.status,

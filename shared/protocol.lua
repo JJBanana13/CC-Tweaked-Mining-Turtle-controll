@@ -4,7 +4,7 @@
 -- Server und Turtles
 -- ============================================
 
-local config = require("shared.config")
+local PROTOCOL = "chunk_mining"
 local protocol = {}
 
 -- Modem finden und oeffnen
@@ -28,7 +28,7 @@ function protocol.send(targetId, msgType, data)
         sender = os.getComputerID(),
         timestamp = os.clock(),
     }
-    rednet.send(targetId, message, config.PROTOCOL)
+    rednet.send(targetId, message, PROTOCOL)
 end
 
 -- Broadcast senden
@@ -39,12 +39,12 @@ function protocol.broadcast(msgType, data)
         sender = os.getComputerID(),
         timestamp = os.clock(),
     }
-    rednet.broadcast(message, config.PROTOCOL)
+    rednet.broadcast(message, PROTOCOL)
 end
 
 -- Nachricht empfangen (mit Timeout)
 function protocol.receive(timeout)
-    local senderId, message = rednet.receive(config.PROTOCOL, timeout)
+    local senderId, message = rednet.receive(PROTOCOL, timeout)
     if senderId and type(message) == "table" and message.type then
         return senderId, message
     end

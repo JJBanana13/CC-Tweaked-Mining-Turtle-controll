@@ -27,6 +27,25 @@ local stats = {
 }
 
 -- ============================================
+-- Config-Payload fuer Turtles
+-- ============================================
+
+-- Baut die Config die an Turtles gesendet wird
+local function buildTurtleConfig()
+    return {
+        BASE_X = config.BASE_X,
+        BASE_Y = config.BASE_Y,
+        BASE_Z = config.BASE_Z,
+        FUEL_CHEST = config.FUEL_CHEST,
+        OUTPUT_CHEST = config.OUTPUT_CHEST,
+        CHUNK_SIZE = config.CHUNK_SIZE,
+        MAX_Y = config.MAX_Y,
+        MIN_Y = config.MIN_Y,
+        FUEL_THRESHOLD = config.FUEL_THRESHOLD,
+    }
+end
+
+-- ============================================
 -- Chunk-Verwaltung
 -- ============================================
 
@@ -107,6 +126,7 @@ local function registerTurtle(senderId, data)
         x = data.x or 0,
         y = data.y or 0,
         z = data.z or 0,
+        home = data.home,
         fuel = data.fuel or 0,
         inventory = 0,
         chunk = nil,
@@ -116,12 +136,17 @@ local function registerTurtle(senderId, data)
         lastSeen = os.clock(),
     }
     print("Turtle registriert: " .. (data.label or senderId))
+    if data.home then
+        print("  Home: (" .. data.home.x .. ", " .. data.home.y .. ", " .. data.home.z .. ")")
+    end
 
     -- Sofort einen Chunk zuweisen wenn nicht pausiert
     if not paused then
         assignChunkToTurtle(senderId)
     else
-        protocol.send(senderId, config.MSG.PAUSE, {})
+        protocol.send(senderId, config.MSG.PAUSE, {
+            config = buildTurtleConfig(),
+        })
     end
 end
 
@@ -134,6 +159,7 @@ function assignChunkToTurtle(turtleId)
         protocol.send(turtleId, config.MSG.ASSIGN_CHUNK, {
             cx = chunk.cx,
             cz = chunk.cz,
+            config = buildTurtleConfig(),
         })
         print("Chunk (" .. chunk.cx .. ", " .. chunk.cz .. ") -> Turtle " .. turtleId)
     else
@@ -154,6 +180,7 @@ local function updateTurtleStatus(senderId, data)
     t.x = data.x or t.x
     t.y = data.y or t.y
     t.z = data.z or t.z
+    t.home = data.home or t.home
     t.fuel = data.fuel or t.fuel
     t.inventory = data.inventory or t.inventory
     t.chunk = data.chunk or t.chunk
@@ -238,7 +265,7 @@ local function processCommand(input)
         print("pause     - Alle Turtles pausieren")
         print("resume    - Alle Turtles fortsetzen")
         print("stop      - Alle Turtles stoppen")
-        print("home      - Alle Turtles zur Basis")
+        print("home      - Alle Turtles nach Home")
         print("add <n>   - N neue Chunks zur Queue")
         print("queue     - Chunk-Queue anzeigen")
         print("quit      - Server beenden")
@@ -252,10 +279,18 @@ local function processCommand(input)
             if t.chunk then
                 chunkStr = "(" .. t.chunk.cx .. "," .. t.chunk.cz .. ")"
             end
+            local homeStr = "---"
+            if t.home then
+                homeStr = "(" .. t.home.x .. "," .. t.home.y .. "," .. t.home.z .. ")"
+            end
             print(string.format(
-                "#%d %-12s %-10s Fuel:%-5d Pos:(%d,%d,%d) Chunk:%s Y:%d",
+                "#%d %-12s %-10s Fuel:%-5d Chunk:%s Y:%d",
                 id, t.label, t.status, t.fuel,
-                t.x, t.y, t.z, chunkStr, t.layer or 0
+                chunkStr, t.layer or 0
+            ))
+            print(string.format(
+                "   Pos:(%d,%d,%d) Home:%s",
+                t.x, t.y, t.z, homeStr
             ))
         end
         if count == 0 then
@@ -274,7 +309,7 @@ local function processCommand(input)
     elseif cmd == "pause" then
         paused = true
         protocol.broadcast(config.MSG.PAUSE, {})
-        print("Alle Turtles pausiert!")
+        print("Alle Turtles pausiert! (kehren zu Home zurueck)")
 
     elseif cmd == "resume" then
         paused = false
@@ -289,11 +324,11 @@ local function processCommand(input)
 
     elseif cmd == "stop" then
         protocol.broadcast(config.MSG.STOP, {})
-        print("Alle Turtles gestoppt!")
+        print("Alle Turtles gestoppt! (kehren zu Home zurueck)")
 
     elseif cmd == "home" then
         protocol.broadcast(config.MSG.COME_HOME, {})
-        print("Alle Turtles kehren zur Basis zurueck!")
+        print("Alle Turtles kehren nach Home zurueck!")
 
     elseif cmd == "add" then
         local n = tonumber(parts[2]) or 64
@@ -476,7 +511,7 @@ end
 
 function server.run()
     print("=================================")
-    print("  Mining Control Server v1.0")
+    print("  Mining Control Server v2.0")
     print("  Server ID: " .. os.getComputerID())
     print("=================================")
 
@@ -493,6 +528,9 @@ function server.run()
         initChunkQueue(256)
     end
 
+    print("")
+    print("Config: Basis=(" .. config.BASE_X .. "," .. config.BASE_Y .. "," .. config.BASE_Z .. ")")
+    print("Config wird automatisch an Turtles gesendet.")
     print("")
     print("Bereit! 'help' fuer Befehle.")
     print("")
