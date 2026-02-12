@@ -32,6 +32,14 @@ config.BASE_Z = 0
 config.FUEL_CHEST = { x = 0, y = 0, z = 0 }      -- Fuel Chest = Basis
 config.OUTPUT_CHEST = { x = 1, y = 0, z = 0 }     -- Output Chest = 1 Block daneben
 
+-- Geschuetzte Chunks (werden NICHT gemined)
+-- Chunk-Koordinaten = Block-Koordinaten / 16 (abgerundet)
+-- Beispiel: Block X=256, Z=-300 -> Chunk 16, -19
+-- Der Basis-Chunk wird automatisch ausgeschlossen!
+config.EXCLUDE_CHUNKS = {
+    -- { cx = 15, cz = -19 },   -- Beispiel: GPS Server Chunk
+}
+
 -- Nachrichten-Typen
 config.MSG = {
     -- Turtle -> Server

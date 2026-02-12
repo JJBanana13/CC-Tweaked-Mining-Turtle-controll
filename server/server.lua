@@ -86,6 +86,24 @@ local function generateChunkSpiral(centerX, centerZ, count)
     return chunks
 end
 
+local function isChunkExcluded(cx, cz)
+    -- Basis-Chunk immer ausschliessen
+    local baseCX = math.floor(config.BASE_X / config.CHUNK_SIZE)
+    local baseCZ = math.floor(config.BASE_Z / config.CHUNK_SIZE)
+    if cx == baseCX and cz == baseCZ then
+        return true
+    end
+    -- Manuell konfigurierte Chunks ausschliessen
+    if config.EXCLUDE_CHUNKS then
+        for _, ec in ipairs(config.EXCLUDE_CHUNKS) do
+            if cx == ec.cx and cz == ec.cz then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function initChunkQueue(numChunks)
     -- Basis-Position automatisch in Chunk-Koordinaten umrechnen
     local startCX = math.floor(config.BASE_X / config.CHUNK_SIZE)
@@ -96,16 +114,21 @@ local function initChunkQueue(numChunks)
         numChunks
     )
     local filtered = {}
+    local excluded = 0
     for _, chunk in ipairs(chunkQueue) do
         local key = chunk.cx .. "," .. chunk.cz
-        if not completedChunks[key] then
+        if completedChunks[key] then
+            -- Bereits fertig, uebersprungen
+        elseif isChunkExcluded(chunk.cx, chunk.cz) then
+            excluded = excluded + 1
+        else
             table.insert(filtered, chunk)
         end
     end
     chunkQueue = filtered
     -- Shared State aktualisieren (Referenz)
     serverState.chunkQueue = chunkQueue
-    print("Chunk-Queue: " .. #chunkQueue .. " Chunks")
+    print("Chunk-Queue: " .. #chunkQueue .. " Chunks (" .. excluded .. " geschuetzt)")
 end
 
 local function getNextChunk()

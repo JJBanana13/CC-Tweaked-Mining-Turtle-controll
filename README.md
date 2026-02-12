@@ -10,6 +10,7 @@ Steuert bis zu 16 Mining Turtles, die systematisch Chunks von oben bis unten abb
 - **Touch-Monitor-UI** - Mastermine-Style Oberflaeche mit Touch-Buttons (Start/Stop/Pause/Home/Resume)
 - **Manueller Start** - Turtles registrieren sich, bleiben aber idle bis man START drueckt
 - **Block-Schutz** - Turtles bauen KEINE CC-Bloecke ab (Computer, Turtles, Modems etc.)
+- **Chunk-Schutz** - Basis-Chunk automatisch geschuetzt, weitere Chunks per Config ausschliessbar (z.B. GPS Server)
 - **Automatische Chunk-Zuweisung** - Spiralfoermig um den Startpunkt
 - **Fuel Management** - Turtles tanken automatisch an der Fuel Chest
 - **Inventar Management** - Automatisches Abladen an der Output Chest
@@ -101,6 +102,22 @@ config.MIN_Y = -64        -- Unterste Ebene
 ```
 
 Das Mining startet automatisch im Chunk wo die Basis steht und arbeitet sich spiralfoermig nach aussen vor.
+Der Basis-Chunk selbst wird automatisch uebersprungen (Schutz fuer Server/Chests).
+
+#### Chunks schuetzen (optional)
+
+Falls du bestimmte Chunks vom Mining ausschliessen willst (z.B. GPS Server):
+
+```lua
+-- Chunk-Koordinaten = Block-Koordinaten / 16 (abgerundet)
+-- Beispiel: Block X=256, Z=-300 -> Chunk 16, -19
+config.EXCLUDE_CHUNKS = {
+    { cx = 15, cz = -19 },   -- GPS Server Chunk
+    { cx = 16, cz = -19 },   -- Weiterer geschuetzter Chunk
+}
+```
+
+**Tipp:** Chunk-Koordinaten findest du mit F3+G (Chunk Borders) oder durch Block-Koordinate / 16.
 
 ### 4. Starten
 
@@ -184,6 +201,11 @@ Jeder Chunk (16x16 Bloecke) wird schichtweise von oben nach unten abgebaut:
 - Turtles erkennen CC-Bloecke (Computer, Turtles, Modems) automatisch per `turtle.inspect()`
 - CC-Bloecke werden NICHT abgebaut sondern uebersprungen
 - Geschuetzt sind alle Bloecke mit Prefix `computercraft:` oder `cc:`
+
+**Chunk-Schutz:**
+- Der Basis-Chunk (wo Server/Chests stehen) wird automatisch uebersprungen
+- Weitere Chunks koennen in `config.EXCLUDE_CHUNKS` geschuetzt werden (z.B. GPS Server)
+- Beim Start zeigt der Server an wieviele Chunks geschuetzt sind
 
 ## Lizenz
 
