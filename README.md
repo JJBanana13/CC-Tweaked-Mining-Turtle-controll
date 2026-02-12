@@ -13,16 +13,18 @@ Steuert bis zu 16 Mining Turtles, die systematisch Chunks von oben bis unten abb
 - **Auto-Recovery** - Turtles starten nach Server-Neustart neu
 - **Persistenter Zustand** - Server speichert Fortschritt automatisch
 - **Dead-Turtle Detection** - Erkennt nicht erreichbare Turtles
+- **Home-Position** - Turtles merken sich wo sie aufgebaut wurden und kehren bei Pause/Stop dorthin zurueck
+- **Zentrale Config** - Config nur auf dem Server, Turtles empfangen sie automatisch per Rednet
 
 ## Aufbau
 
 ```
 Projekt/
 ├── shared/
-│   ├── config.lua       -- Konfiguration (Positionen, Settings)
+│   ├── config.lua       -- Konfiguration (NUR auf Server!)
 │   └── protocol.lua     -- Rednet Kommunikationsprotokoll
 ├── turtle/
-│   ├── chunk_miner.lua  -- Mining-Programm fuer die Turtles
+│   ├── chunk_miner.lua  -- Mining-Programm (bekommt Config vom Server)
 │   └── startup.lua      -- Startup-Script fuer Turtles
 ├── server/
 │   ├── server.lua       -- Server/Controller-Programm
@@ -79,9 +81,9 @@ wget run https://raw.githubusercontent.com/JJBanana13/CC-Tweaked-Mining-Turtle-c
 wget run https://raw.githubusercontent.com/JJBanana13/CC-Tweaked-Mining-Turtle-controll/main/installer.lua turtle
 ```
 
-### 3. Konfiguration anpassen
+### 3. Konfiguration anpassen (NUR auf dem Server!)
 
-Bearbeite `shared/config.lua` (auf Server UND allen Turtles):
+Bearbeite `shared/config.lua` auf dem **Server-Computer**. Turtles brauchen KEINE Config - sie empfangen alles automatisch vom Server:
 
 ```lua
 -- Setze die Position deiner Fuel Chest
@@ -112,10 +114,10 @@ config.START_CHUNK_Z = 0  -- Chunk-Z (Block-Z / 16)
 | `help` | Zeigt alle Befehle |
 | `status` | Zeigt Status aller Turtles |
 | `stats` | Zeigt Statistiken (Bloecke, Chunks, Laufzeit) |
-| `pause` | Pausiert alle Turtles |
+| `pause` | Pausiert alle Turtles (kehren zu Home zurueck) |
 | `resume` | Setzt alle Turtles fort |
-| `stop` | Stoppt alle Turtles (fahren zur Basis) |
-| `home` | Alle Turtles zur Basis rufen |
+| `stop` | Stoppt alle Turtles (kehren zu Home zurueck) |
+| `home` | Alle Turtles nach Home schicken |
 | `add <n>` | N neue Chunks zur Warteschlange |
 | `queue` | Zeigt Chunk-Warteschlange |
 | `quit` | Server beenden |
@@ -155,9 +157,9 @@ Jeder Chunk (16x16 Bloecke) wird schichtweise von oben nach unten abgebaut:
 - Pruefe GPS Signal
 
 **Server findet keine Turtles:**
-- Beide muessen das gleiche Protokoll nutzen (selbe config.lua)
 - Wireless Modem muss auf beiden Seiten aktiv sein
 - Reichweite pruefen (Standard: 64 Bloecke, mit Ender Modem: unbegrenzt)
+- Config muss nur auf dem Server vorhanden sein (wird automatisch gesendet)
 
 **Turtle bleibt stecken:**
 - Die Turtle versucht 30x ein Hindernis zu entfernen

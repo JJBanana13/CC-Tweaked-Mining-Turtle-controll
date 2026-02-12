@@ -18,7 +18,6 @@ local files = {
         { remote = "server/startup.lua",   localPath = "startup.lua" },
     },
     turtle = {
-        { remote = "shared/config.lua",    localPath = "shared/config.lua" },
         { remote = "shared/protocol.lua",  localPath = "shared/protocol.lua" },
         { remote = "turtle/chunk_miner.lua", localPath = "turtle/chunk_miner.lua" },
         { remote = "turtle/startup.lua",   localPath = "startup.lua" },
@@ -152,9 +151,9 @@ if mode == "server" then
     print("  2) Starte mit: reboot")
 elseif mode == "turtle" then
     print("Naechste Schritte:")
-    print("  1) Pruefe shared/config.lua")
-    print("     -> Gleiche Basis-Position wie Server!")
-    print("  2) Starte mit: reboot")
+    print("  1) Starte mit: reboot")
+    print("  (Config wird automatisch vom Server")
+    print("   empfangen - keine Einrichtung noetig!)")
 end
 
 print("")
