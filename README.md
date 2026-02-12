@@ -27,7 +27,7 @@ Projekt/
 ├── server/
 │   ├── server.lua       -- Server/Controller-Programm
 │   └── startup.lua      -- Startup-Script fuer Server
-└── install.lua          -- Installer-Script
+└── installer.lua        -- Automatischer Installer (wget)
 ```
 
 ## Voraussetzungen
@@ -65,9 +65,23 @@ shell.run("gps", "host", X, Y, Z)
 - Notiere die Koordinaten der Fuel Chest (das wird `BASE_X`, `BASE_Y`, `BASE_Z`)
 - Die Output Chest ist 1 Block daneben (Ost/+X Richtung)
 
-### 2. Konfiguration anpassen
+### 2. Automatische Installation (empfohlen)
 
-Bearbeite `shared/config.lua`:
+Fuehre auf dem **Server-Computer** aus:
+```
+wget run https://raw.githubusercontent.com/JJBanana13/CC-Tweaked-Mining-Turtle-controll/main/installer.lua
+```
+Waehle `1` (Server). Dann auf jeder **Turtle** denselben Befehl ausfuehren und `2` (Turtle) waehlen.
+
+Oder direkt mit Argument:
+```
+wget run https://raw.githubusercontent.com/JJBanana13/CC-Tweaked-Mining-Turtle-controll/main/installer.lua server
+wget run https://raw.githubusercontent.com/JJBanana13/CC-Tweaked-Mining-Turtle-controll/main/installer.lua turtle
+```
+
+### 3. Konfiguration anpassen
+
+Bearbeite `shared/config.lua` (auf Server UND allen Turtles):
 
 ```lua
 -- Setze die Position deiner Fuel Chest
@@ -84,23 +98,7 @@ config.START_CHUNK_X = 0  -- Chunk-X (Block-X / 16)
 config.START_CHUNK_Z = 0  -- Chunk-Z (Block-Z / 16)
 ```
 
-### 3. Dateien auf Server kopieren
-
-Kopiere alle Dateien auf den Server Computer:
-- `shared/config.lua`
-- `shared/protocol.lua`
-- `server/server.lua`
-- `server/startup.lua` → als `startup.lua` im Root
-
-### 4. Dateien auf Turtles kopieren
-
-Kopiere auf jede Turtle:
-- `shared/config.lua`
-- `shared/protocol.lua`
-- `turtle/chunk_miner.lua`
-- `turtle/startup.lua` → als `startup.lua` im Root
-
-### 5. Starten
+### 4. Starten
 
 1. Zuerst den **Server** starten (Computer rebooten)
 2. Dann die **Turtles** starten (jeweils rebooten)
