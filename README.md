@@ -90,7 +90,7 @@ wget run https://raw.githubusercontent.com/JJBanana13/CC-Tweaked-Mining-Turtle-c
 Bearbeite `shared/config.lua` auf dem **Server-Computer**. Turtles brauchen KEINE Config - sie empfangen alles automatisch vom Server:
 
 ```lua
--- Setze die Position deiner Fuel Chest
+-- Setze die Position deiner Fuel Chest (Block-Koordinaten aus F3-Screen)
 config.BASE_X = 100      -- X-Koordinate
 config.BASE_Y = 200      -- Y-Koordinate
 config.BASE_Z = 100      -- Z-Koordinate
@@ -98,11 +98,9 @@ config.BASE_Z = 100      -- Z-Koordinate
 -- Mining Dimension Hoehe (Standard fuer ATM10)
 config.MAX_Y = 319       -- Oberste Ebene
 config.MIN_Y = -64        -- Unterste Ebene
-
--- Mining Start-Position (Block-Koordinaten, wie im F3-Screen)
-config.START_X = 0        -- X wo das Mining starten soll
-config.START_Z = 0        -- Z wo das Mining starten soll
 ```
+
+Das Mining startet automatisch im Chunk wo die Basis steht und arbeitet sich spiralfoermig nach aussen vor.
 
 ### 4. Starten
 

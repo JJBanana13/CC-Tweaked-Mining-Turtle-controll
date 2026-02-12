@@ -32,11 +32,6 @@ config.BASE_Z = 0
 config.FUEL_CHEST = { x = 0, y = 0, z = 0 }      -- Fuel Chest = Basis
 config.OUTPUT_CHEST = { x = 1, y = 0, z = 0 }     -- Output Chest = 1 Block daneben
 
--- Mining Start-Position (Block-Koordinaten, wie im F3-Screen)
--- Der Code rechnet automatisch in Chunk-Koordinaten um.
-config.START_X = 0
-config.START_Z = 0
-
 -- Nachrichten-Typen
 config.MSG = {
     -- Turtle -> Server
