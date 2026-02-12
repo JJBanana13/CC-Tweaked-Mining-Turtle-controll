@@ -67,6 +67,25 @@ local state = {
     chunksCompleted = 0,
 }
 
+-- ============================================
+-- Block-Schutz: CC-Bloecke nicht abbauen
+-- ============================================
+
+local PROTECTED_PREFIXES = { "computercraft:", "cc:" }
+
+local function isProtectedBlock(inspectFn)
+    local success, data = inspectFn()
+    if success and data and data.name then
+        local name = data.name:lower()
+        for _, prefix in ipairs(PROTECTED_PREFIXES) do
+            if name:sub(1, #prefix) == prefix then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- GPS Position holen
 local function getGPSPosition()
     local x, y, z = gps.locate(5)
@@ -129,6 +148,9 @@ local function forward()
     local tries = 0
     while not turtle.forward() do
         if turtle.detect() then
+            if isProtectedBlock(turtle.inspect) then
+                return false
+            end
             turtle.dig()
         end
         if turtle.attack() then
@@ -150,6 +172,9 @@ local function up()
     local tries = 0
     while not turtle.up() do
         if turtle.detectUp() then
+            if isProtectedBlock(turtle.inspectUp) then
+                return false
+            end
             turtle.digUp()
         end
         if turtle.attackUp() then end
@@ -164,6 +189,9 @@ local function down()
     local tries = 0
     while not turtle.down() do
         if turtle.detectDown() then
+            if isProtectedBlock(turtle.inspectDown) then
+                return false
+            end
             turtle.digDown()
         end
         if turtle.attackDown() then end
@@ -378,14 +406,14 @@ local function mineLayer()
         -- Eine Reihe abbauen (15 Bloecke vorwaerts = 16 Positionen)
         for col = 1, cfg.CHUNK_SIZE - 1 do
             -- Block davor abbauen und vorwaerts
-            if turtle.detect() then
+            if turtle.detect() and not isProtectedBlock(turtle.inspect) then
                 turtle.dig()
                 state.blocksMinedTotal = state.blocksMinedTotal + 1
             end
             forward()
 
             -- Block darunter auch abbauen (2 Ebenen pro Durchgang)
-            if turtle.detectDown() then
+            if turtle.detectDown() and not isProtectedBlock(turtle.inspectDown) then
                 turtle.digDown()
                 state.blocksMinedTotal = state.blocksMinedTotal + 1
             end
@@ -409,7 +437,7 @@ local function mineLayer()
         end
 
         -- Block darunter auch am Ende der Reihe
-        if turtle.detectDown() then
+        if turtle.detectDown() and not isProtectedBlock(turtle.inspectDown) then
             turtle.digDown()
             state.blocksMinedTotal = state.blocksMinedTotal + 1
         end
@@ -419,12 +447,12 @@ local function mineLayer()
             if row % 2 == 0 then
                 -- Rechts abbiegen zur naechsten Reihe
                 turnRight()
-                if turtle.detect() then
+                if turtle.detect() and not isProtectedBlock(turtle.inspect) then
                     turtle.dig()
                     state.blocksMinedTotal = state.blocksMinedTotal + 1
                 end
                 forward()
-                if turtle.detectDown() then
+                if turtle.detectDown() and not isProtectedBlock(turtle.inspectDown) then
                     turtle.digDown()
                     state.blocksMinedTotal = state.blocksMinedTotal + 1
                 end
@@ -432,12 +460,12 @@ local function mineLayer()
             else
                 -- Links abbiegen zur naechsten Reihe
                 turnLeft()
-                if turtle.detect() then
+                if turtle.detect() and not isProtectedBlock(turtle.inspect) then
                     turtle.dig()
                     state.blocksMinedTotal = state.blocksMinedTotal + 1
                 end
                 forward()
-                if turtle.detectDown() then
+                if turtle.detectDown() and not isProtectedBlock(turtle.inspectDown) then
                     turtle.digDown()
                     state.blocksMinedTotal = state.blocksMinedTotal + 1
                 end

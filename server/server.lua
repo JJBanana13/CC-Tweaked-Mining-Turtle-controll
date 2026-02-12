@@ -1,15 +1,17 @@
 -- ============================================
 -- Mining Server - Steuert alle 16 Turtles
 -- Weist Chunks zu, ueberwacht Status
+-- Touch-Monitor-UI fuer Steuerung
 -- ============================================
 
 local config = require("shared.config")
 local protocol = require("shared.protocol")
+local monitorUI = require("server.monitor_ui")
 
 local server = {}
 
 -- ============================================
--- Server State
+-- Server State (shared mit Monitor-UI)
 -- ============================================
 
 local turtles = {}           -- Registrierte Turtles {[id] = turtleData}
@@ -17,7 +19,6 @@ local chunkQueue = {}        -- Warteschlange der zu minenden Chunks
 local completedChunks = {}   -- Bereits abgeschlossene Chunks
 local activeChunks = {}      -- Gerade in Bearbeitung {[turtleId] = {cx, cz}}
 local running = true
-local paused = false
 
 -- Statistiken
 local stats = {
@@ -26,11 +27,18 @@ local stats = {
     startTime = os.clock(),
 }
 
+-- Shared State fuer Monitor-UI (Tabelle damit paused per Referenz geteilt wird)
+local serverState = {
+    turtles = turtles,
+    chunkQueue = chunkQueue,
+    stats = stats,
+    paused = true,  -- DEFAULT: Pausiert! Muss manuell gestartet werden.
+}
+
 -- ============================================
 -- Config-Payload fuer Turtles
 -- ============================================
 
--- Baut die Config die an Turtles gesendet wird
 local function buildTurtleConfig()
     return {
         BASE_X = config.BASE_X,
@@ -49,7 +57,6 @@ end
 -- Chunk-Verwaltung
 -- ============================================
 
--- Chunks in einer Spirale um den Startpunkt generieren
 local function generateChunkSpiral(centerX, centerZ, count)
     local chunks = {}
     local x, z = centerX, centerZ
@@ -66,7 +73,6 @@ local function generateChunkSpiral(centerX, centerZ, count)
 
         if segmentPassed == segmentLength then
             segmentPassed = 0
-            -- Richtung drehen
             local temp = dx
             dx = -dz
             dz = temp
@@ -80,14 +86,12 @@ local function generateChunkSpiral(centerX, centerZ, count)
     return chunks
 end
 
--- Chunk-Queue initialisieren
 local function initChunkQueue(numChunks)
     chunkQueue = generateChunkSpiral(
         config.START_CHUNK_X,
         config.START_CHUNK_Z,
         numChunks
     )
-    -- Bereits abgeschlossene Chunks entfernen
     local filtered = {}
     for _, chunk in ipairs(chunkQueue) do
         local key = chunk.cx .. "," .. chunk.cz
@@ -96,10 +100,11 @@ local function initChunkQueue(numChunks)
         end
     end
     chunkQueue = filtered
+    -- Shared State aktualisieren (Referenz)
+    serverState.chunkQueue = chunkQueue
     print("Chunk-Queue: " .. #chunkQueue .. " Chunks")
 end
 
--- Naechsten Chunk aus der Queue holen
 local function getNextChunk()
     if #chunkQueue == 0 then
         return nil
@@ -107,7 +112,6 @@ local function getNextChunk()
     return table.remove(chunkQueue, 1)
 end
 
--- Chunk als erledigt markieren
 local function markChunkDone(cx, cz)
     local key = cx .. "," .. cz
     completedChunks[key] = true
@@ -140,8 +144,8 @@ local function registerTurtle(senderId, data)
         print("  Home: (" .. data.home.x .. ", " .. data.home.y .. ", " .. data.home.z .. ")")
     end
 
-    -- Sofort einen Chunk zuweisen wenn nicht pausiert
-    if not paused then
+    -- Chunk zuweisen wenn nicht pausiert, sonst PAUSE senden
+    if not serverState.paused then
         assignChunkToTurtle(senderId)
     else
         protocol.send(senderId, config.MSG.PAUSE, {
@@ -170,7 +174,6 @@ end
 
 local function updateTurtleStatus(senderId, data)
     if not turtles[senderId] then
-        -- Unbekannte Turtle - registrieren
         registerTurtle(senderId, data)
         return
     end
@@ -189,8 +192,7 @@ local function updateTurtleStatus(senderId, data)
     t.chunksCompleted = data.chunksCompleted or t.chunksCompleted
     t.lastSeen = os.clock()
 
-    -- Wenn idle und nicht pausiert, neuen Chunk zuweisen
-    if data.status == config.STATE.IDLE and not paused then
+    if data.status == config.STATE.IDLE and not serverState.paused then
         assignChunkToTurtle(senderId)
     end
 end
@@ -204,8 +206,7 @@ local function handleChunkDone(senderId, data)
     end
     stats.totalBlocksMined = stats.totalBlocksMined + (data.blocksMinedTotal or 0)
 
-    -- Neuen Chunk zuweisen
-    if not paused then
+    if not serverState.paused then
         assignChunkToTurtle(senderId)
     end
 end
@@ -248,6 +249,32 @@ local function handleMessage(senderId, msg)
 end
 
 -- ============================================
+-- Monitor Touch-Actions ausfuehren
+-- ============================================
+
+local function executeAction(action)
+    if action == "start" or action == "start_all" or action == "resume_all" then
+        serverState.paused = false
+        protocol.broadcast(config.MSG.RESUME, {})
+        print("[Monitor] START - Alle Turtles fortgesetzt")
+        for id, t in pairs(turtles) do
+            if t.status == config.STATE.IDLE or t.status == config.STATE.PAUSED then
+                assignChunkToTurtle(id)
+            end
+        end
+
+    elseif action == "stop" or action == "pause_all" then
+        serverState.paused = true
+        protocol.broadcast(config.MSG.PAUSE, {})
+        print("[Monitor] PAUSE - Alle Turtles pausiert")
+
+    elseif action == "home_all" then
+        protocol.broadcast(config.MSG.COME_HOME, {})
+        print("[Monitor] HOME - Alle Turtles nach Home")
+    end
+end
+
+-- ============================================
 -- Server Befehle (Terminal Input)
 -- ============================================
 
@@ -262,6 +289,7 @@ local function processCommand(input)
         print("=== Befehle ===")
         print("status    - Zeige alle Turtles")
         print("stats     - Statistiken anzeigen")
+        print("start     - Alle Turtles starten")
         print("pause     - Alle Turtles pausieren")
         print("resume    - Alle Turtles fortsetzen")
         print("stop      - Alle Turtles stoppen")
@@ -306,29 +334,18 @@ local function processCommand(input)
         print("Chunks in Queue: " .. #chunkQueue)
         print("Bloecke abgebaut: " .. stats.totalBlocksMined)
 
-    elseif cmd == "pause" then
-        paused = true
-        protocol.broadcast(config.MSG.PAUSE, {})
-        print("Alle Turtles pausiert! (kehren zu Home zurueck)")
+    elseif cmd == "start" or cmd == "resume" then
+        executeAction("start")
 
-    elseif cmd == "resume" then
-        paused = false
-        protocol.broadcast(config.MSG.RESUME, {})
-        print("Alle Turtles fortgesetzt!")
-        -- Idle Turtles neue Chunks zuweisen
-        for id, t in pairs(turtles) do
-            if t.status == config.STATE.IDLE or t.status == config.STATE.PAUSED then
-                assignChunkToTurtle(id)
-            end
-        end
+    elseif cmd == "pause" then
+        executeAction("pause_all")
 
     elseif cmd == "stop" then
         protocol.broadcast(config.MSG.STOP, {})
         print("Alle Turtles gestoppt! (kehren zu Home zurueck)")
 
     elseif cmd == "home" then
-        protocol.broadcast(config.MSG.COME_HOME, {})
-        print("Alle Turtles kehren nach Home zurueck!")
+        executeAction("home_all")
 
     elseif cmd == "add" then
         local n = tonumber(parts[2]) or 64
@@ -368,7 +385,7 @@ local function saveState()
         chunkQueue = chunkQueue,
         activeChunks = activeChunks,
         stats = stats,
-        paused = paused,
+        paused = serverState.paused,
     }
     local f = fs.open(SAVE_FILE, "w")
     if f then
@@ -387,12 +404,20 @@ local function loadState()
             if data then
                 completedChunks = data.completedChunks or {}
                 chunkQueue = data.chunkQueue or {}
+                serverState.chunkQueue = chunkQueue
                 activeChunks = data.activeChunks or {}
                 stats = data.stats or stats
-                paused = data.paused or false
+                serverState.stats = stats
+                -- Pause-Status laden (default: true wenn nicht vorhanden)
+                if data.paused ~= nil then
+                    serverState.paused = data.paused
+                else
+                    serverState.paused = true
+                end
                 print("Gespeicherter Zustand geladen!")
                 print("  Fertige Chunks: " .. stats.totalChunksCompleted)
                 print("  Queue: " .. #chunkQueue .. " Chunks")
+                print("  Pausiert: " .. tostring(serverState.paused))
                 return true
             end
         end
@@ -401,108 +426,18 @@ local function loadState()
 end
 
 -- ============================================
--- Monitor UI (separater Thread)
+-- Monitor initialisieren
 -- ============================================
 
-local monitor = nil
-
-local function findMonitor()
-    monitor = peripheral.find("monitor")
-    if monitor then
-        monitor.setTextScale(0.5)
-        monitor.clear()
-        print("Monitor gefunden!")
+local function initMonitor()
+    local mon = peripheral.find("monitor")
+    if mon then
+        monitorUI.init(mon, serverState, config)
+        print("Monitor gefunden! Touch-UI aktiv.")
         return true
     end
+    print("Kein Monitor gefunden. Nur Terminal-Steuerung.")
     return false
-end
-
-local function drawMonitor()
-    if not monitor then return end
-
-    monitor.clear()
-    local w, h = monitor.getSize()
-
-    -- Titel
-    monitor.setCursorPos(1, 1)
-    monitor.setTextColor(colors.yellow)
-    monitor.write("=== Mining Control Server ===")
-
-    -- Statistiken
-    monitor.setCursorPos(1, 3)
-    monitor.setTextColor(colors.white)
-    local elapsed = os.clock() - stats.startTime
-    monitor.write("Laufzeit: " .. math.floor(elapsed) .. "s")
-
-    monitor.setCursorPos(1, 4)
-    monitor.setTextColor(colors.lime)
-    monitor.write("Chunks fertig: " .. stats.totalChunksCompleted)
-
-    monitor.setCursorPos(1, 5)
-    monitor.setTextColor(colors.cyan)
-    monitor.write("Queue: " .. #chunkQueue .. " Chunks")
-
-    monitor.setCursorPos(1, 6)
-    monitor.setTextColor(paused and colors.red or colors.lime)
-    monitor.write("Status: " .. (paused and "PAUSIERT" or "AKTIV"))
-
-    -- Turtle-Liste
-    monitor.setCursorPos(1, 8)
-    monitor.setTextColor(colors.yellow)
-    monitor.write("--- Turtles ---")
-
-    local line = 9
-    for id, t in pairs(turtles) do
-        if line >= h then break end
-
-        -- Status-Farbe
-        if t.status == config.STATE.MINING then
-            monitor.setTextColor(colors.lime)
-        elseif t.status == config.STATE.TRAVELING then
-            monitor.setTextColor(colors.cyan)
-        elseif t.status == config.STATE.REFUELING then
-            monitor.setTextColor(colors.orange)
-        elseif t.status == config.STATE.DEPOSITING then
-            monitor.setTextColor(colors.magenta)
-        elseif t.status == config.STATE.PAUSED then
-            monitor.setTextColor(colors.yellow)
-        elseif t.status == config.STATE.ERROR then
-            monitor.setTextColor(colors.red)
-        else
-            monitor.setTextColor(colors.white)
-        end
-
-        local chunkStr = "---"
-        if t.chunk then
-            chunkStr = t.chunk.cx .. "," .. t.chunk.cz
-        end
-
-        monitor.setCursorPos(1, line)
-        monitor.write(string.format("%-10s", t.label:sub(1, 10)))
-
-        monitor.setCursorPos(12, line)
-        monitor.write(string.format("%-9s", t.status:sub(1, 9)))
-
-        monitor.setCursorPos(22, line)
-        monitor.setTextColor(t.fuel < config.FUEL_THRESHOLD and colors.red or colors.white)
-        monitor.write("F:" .. t.fuel)
-
-        monitor.setCursorPos(32, line)
-        monitor.setTextColor(colors.white)
-        monitor.write("C:" .. chunkStr)
-
-        monitor.setCursorPos(42, line)
-        monitor.write("Y:" .. (t.layer or "?"))
-
-        line = line + 1
-    end
-
-    -- Keine Turtles
-    if line == 9 then
-        monitor.setCursorPos(1, line)
-        monitor.setTextColor(colors.gray)
-        monitor.write("Warte auf Turtles...")
-    end
 end
 
 -- ============================================
@@ -511,7 +446,7 @@ end
 
 function server.run()
     print("=================================")
-    print("  Mining Control Server v2.0")
+    print("  Mining Control Server v3.0")
     print("  Server ID: " .. os.getComputerID())
     print("=================================")
 
@@ -519,23 +454,23 @@ function server.run()
     protocol.init()
     print("Modem initialisiert")
 
-    -- Monitor suchen
-    findMonitor()
+    -- Monitor init
+    local hasMonitor = initMonitor()
 
     -- Gespeicherten Zustand laden
     if not loadState() then
-        -- Neue Queue generieren (256 Chunks = 16x16 Chunk-Bereich)
         initChunkQueue(256)
     end
 
     print("")
     print("Config: Basis=(" .. config.BASE_X .. "," .. config.BASE_Y .. "," .. config.BASE_Z .. ")")
-    print("Config wird automatisch an Turtles gesendet.")
+    print("Status: " .. (serverState.paused and "PAUSIERT" or "AKTIV"))
+    print("Druecke START auf dem Monitor oder tippe 'start' zum Starten.")
     print("")
-    print("Bereit! 'help' fuer Befehle.")
+    print("'help' fuer alle Befehle.")
     print("")
 
-    -- Parallel: Nachrichten empfangen + Terminal Input + Monitor + Auto-Save
+    -- Parallel: Nachrichten + Terminal + Monitor Draw + Monitor Touch + Auto-Save + Dead-Turtle
     parallel.waitForAny(
         -- Nachrichten empfangen
         function()
@@ -557,11 +492,27 @@ function server.run()
             end
         end,
 
-        -- Monitor aktualisieren
+        -- Monitor zeichnen
         function()
             while running do
-                drawMonitor()
+                monitorUI.draw()
                 sleep(2)
+            end
+        end,
+
+        -- Monitor Touch Events
+        function()
+            if not hasMonitor then
+                while running do sleep(60) end
+                return
+            end
+            while running do
+                local event, side, x, y = os.pullEvent("monitor_touch")
+                local action = monitorUI.handleTouch(x, y)
+                if action then
+                    executeAction(action)
+                    monitorUI.draw()
+                end
             end
         end,
 
@@ -582,7 +533,6 @@ function server.run()
                     if now - t.lastSeen > 120 then
                         print("WARNUNG: Turtle " .. id .. " nicht erreichbar seit " ..
                             math.floor(now - t.lastSeen) .. "s")
-                        -- Chunk zurueck in die Queue
                         if activeChunks[id] then
                             table.insert(chunkQueue, 1, activeChunks[id])
                             activeChunks[id] = nil

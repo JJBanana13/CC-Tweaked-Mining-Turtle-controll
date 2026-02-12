@@ -14,8 +14,9 @@ local files = {
     server = {
         { remote = "shared/config.lua",    localPath = "shared/config.lua" },
         { remote = "shared/protocol.lua",  localPath = "shared/protocol.lua" },
-        { remote = "server/server.lua",    localPath = "server/server.lua" },
-        { remote = "server/startup.lua",   localPath = "startup.lua" },
+        { remote = "server/server.lua",       localPath = "server/server.lua" },
+        { remote = "server/monitor_ui.lua",  localPath = "server/monitor_ui.lua" },
+        { remote = "server/startup.lua",     localPath = "startup.lua" },
     },
     turtle = {
         { remote = "shared/protocol.lua",  localPath = "shared/protocol.lua" },

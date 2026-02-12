@@ -7,6 +7,9 @@ Steuert bis zu 16 Mining Turtles, die systematisch Chunks von oben bis unten abb
 
 - **16 Mining Turtles** die parallel Chunks abbauen
 - **Zentraler Server** mit Monitor-UI zur Ueberwachung und Steuerung
+- **Touch-Monitor-UI** - Mastermine-Style Oberflaeche mit Touch-Buttons (Start/Stop/Pause/Home/Resume)
+- **Manueller Start** - Turtles registrieren sich, bleiben aber idle bis man START drueckt
+- **Block-Schutz** - Turtles bauen KEINE CC-Bloecke ab (Computer, Turtles, Modems etc.)
 - **Automatische Chunk-Zuweisung** - Spiralfoermig um den Startpunkt
 - **Fuel Management** - Turtles tanken automatisch an der Fuel Chest
 - **Inventar Management** - Automatisches Abladen an der Output Chest
@@ -28,6 +31,7 @@ Projekt/
 │   └── startup.lua      -- Startup-Script fuer Turtles
 ├── server/
 │   ├── server.lua       -- Server/Controller-Programm
+│   ├── monitor_ui.lua   -- Touch-Monitor-UI (Mastermine-Style)
 │   └── startup.lua      -- Startup-Script fuer Server
 └── installer.lua        -- Automatischer Installer (wget)
 ```
@@ -105,7 +109,8 @@ config.START_CHUNK_Z = 0  -- Chunk-Z (Block-Z / 16)
 1. Zuerst den **Server** starten (Computer rebooten)
 2. Dann die **Turtles** starten (jeweils rebooten)
 3. Die Turtles registrieren sich automatisch beim Server
-4. Der Server weist jedem Turtle einen Chunk zu
+4. **Wichtig:** Turtles bleiben nach dem Registrieren im Idle-Modus!
+5. Druecke **START** auf dem Monitor oder tippe `start` in der Konsole um das Mining zu starten
 
 ## Server-Befehle
 
@@ -114,6 +119,7 @@ config.START_CHUNK_Z = 0  -- Chunk-Z (Block-Z / 16)
 | `help` | Zeigt alle Befehle |
 | `status` | Zeigt Status aller Turtles |
 | `stats` | Zeigt Statistiken (Bloecke, Chunks, Laufzeit) |
+| `start` | Startet das Mining (hebt Pause auf) |
 | `pause` | Pausiert alle Turtles (kehren zu Home zurueck) |
 | `resume` | Setzt alle Turtles fort |
 | `stop` | Stoppt alle Turtles (kehren zu Home zurueck) |
@@ -122,16 +128,26 @@ config.START_CHUNK_Z = 0  -- Chunk-Z (Block-Z / 16)
 | `queue` | Zeigt Chunk-Warteschlange |
 | `quit` | Server beenden |
 
-## Monitor-Anzeige
+## Monitor-Anzeige (Touch-UI)
 
-Der Monitor zeigt:
-- Server-Status (Aktiv/Pausiert)
-- Laufzeit und Statistiken
-- Alle Turtles mit:
-  - Name und Status (farbcodiert)
-  - Fuel-Level (rot wenn niedrig)
-  - Aktueller Chunk
-  - Aktuelle Y-Ebene
+Der Monitor zeigt eine Touch-bedienbare Oberflaeche im Mastermine-Style:
+
+### Layout
+- **Titelleiste** - "MINING CONTROL" (oben)
+- **Statistiken** - Chunks fertig/in Queue, Laufzeit, Bloecke abgebaut
+- **START/STOP Button** - Grosser Touch-Button oben rechts (gruen/rot)
+- **Turtle-Liste** - Alle Turtles mit ID, Name, Status, Fuel, Chunk, Y-Level
+- **Control-Buttons** - START ALL, PAUSE ALL, HOME ALL, RESUME ALL (unten)
+
+### Touch-Buttons
+| Button | Funktion |
+|--------|----------|
+| **START** (gruen) | Startet das Mining, weist Chunks zu |
+| **STOP** (rot) | Pausiert alle Turtles, kehren zu Home zurueck |
+| **START ALL** | Startet alle Turtles |
+| **PAUSE ALL** | Pausiert alle Turtles |
+| **HOME ALL** | Schickt alle Turtles nach Home |
+| **RESUME ALL** | Setzt alle Turtles fort |
 
 ### Farbcodes
 - **Gruen** = Mining
@@ -165,6 +181,11 @@ Jeder Chunk (16x16 Bloecke) wird schichtweise von oben nach unten abgebaut:
 - Die Turtle versucht 30x ein Hindernis zu entfernen
 - Bei Bedrock oder geschuetzten Bloecken bleibt sie stecken
 - Server erkennt "tote" Turtles nach 120 Sekunden und weist den Chunk neu zu
+
+**Block-Schutz:**
+- Turtles erkennen CC-Bloecke (Computer, Turtles, Modems) automatisch per `turtle.inspect()`
+- CC-Bloecke werden NICHT abgebaut sondern uebersprungen
+- Geschuetzt sind alle Bloecke mit Prefix `computercraft:` oder `cc:`
 
 ## Lizenz
 
