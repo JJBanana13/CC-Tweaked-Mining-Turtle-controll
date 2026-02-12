@@ -7,6 +7,8 @@
 
 local PROTOCOL = "atm10_chunkfleet"
 local STATE_FILE = "controller_state"
+local HEARTBEAT_TIMEOUT = 20
+local JOB_TIMEOUT = 15 * 60
 
 local app = {
   screen = term.current(),
@@ -308,10 +310,57 @@ local function handleNet(sender, msg)
       t.chunk = nil
       saveState()
       assignQueuedJobs()
+    elseif msg.status == "error" and msg.chunk then
+      local k = keyFor(msg.chunk.x, msg.chunk.z)
+      app.world.jobs[k] = { queued = true }
+      t.status = "idle"
+      t.chunk = nil
+      saveState()
+      assignQueuedJobs()
     elseif msg.status == "idle" then
       t.chunk = nil
       assignQueuedJobs()
     end
+  end
+end
+
+local function queueChunkByKey(k)
+  local x, z = parseKey(k)
+  if x and z then
+    app.world.jobs[k] = { queued = true }
+  end
+end
+
+local function recoverStaleTurtlesAndJobs(now)
+  now = now or os.clock()
+  local dirty = false
+
+  for id, t in pairs(app.turtles) do
+    if t.lastSeen and (now - t.lastSeen) > HEARTBEAT_TIMEOUT then
+      if t.chunk then
+        local k = keyFor(t.chunk.x, t.chunk.z)
+        if app.world.jobs[k] then
+          queueChunkByKey(k)
+          dirty = true
+        end
+      end
+      t.status = "offline"
+      t.chunk = nil
+    end
+  end
+
+  for k, job in pairs(app.world.jobs) do
+    if job.assignedTo and job.startedAt then
+      local age = (os.epoch("utc") - job.startedAt) / 1000
+      if age > JOB_TIMEOUT then
+        app.world.jobs[k] = { queued = true }
+        dirty = true
+      end
+    end
+  end
+
+  if dirty then
+    saveState()
   end
 end
 
@@ -373,6 +422,8 @@ local function boot()
   attachMonitorIfPresent()
 
   while true do
+    recoverStaleTurtlesAndJobs(os.clock())
+    assignQueuedJobs()
     drawUI()
     local ev, p1, p2, p3 = os.pullEvent()
     if ev == "rednet_message" then
